@@ -1,32 +1,96 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="16dp">
 
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/textViewDeviceName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="18sp"/>
+        android:textSize="12sp" />
 
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/textViewAddress"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="18sp"/>
+        android:textSize="12sp" />
 
-    <TextView
-        android:id="@+id/textViewThreads"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="18sp"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
 
-    <Button
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Threads: "
+            android:textSize="12sp"/>
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editTextThreads"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="8"
+            android:inputType="numberDecimal"
+            android:hint="eg. 8 Threads (Coroutines)"
+            android:imeOptions="actionNext"
+            android:textSize="12sp"
+            android:cursorVisible="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonStartStop"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Start"/>
+        android:text="Start"
+        android:layout_weight="1"/>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchLogView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:checked="true"
+            android:text="Log"
+            android:textSize="12sp"
+            android:textAlignment="textEnd" />
+
+    </LinearLayout>
+
+    <com.google.android.material.divider.MaterialDivider
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:layout_marginTop="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#1B1B1B"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="6dp"
+            android:scrollbars="vertical"> <!-- Enables vertical scrollbar -->
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/logTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="100"
+                android:padding="8dp"
+                android:scrollbarStyle="insideOverlay"
+                android:textColor="#00FF00"
+                android:textSize="9sp" />
+        </ScrollView>
+
+    </LinearLayout>
 </LinearLayout>

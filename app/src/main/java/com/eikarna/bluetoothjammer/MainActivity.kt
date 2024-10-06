@@ -23,6 +23,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import api.BluetoothDeviceInfo
 import api.ScanNearbyDevices
+import java.util.Date
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,9 +45,19 @@ class MainActivity : AppCompatActivity() {
         // Check and request necessary permissions
         checkBluetoothStatusAndPermissions()
 
+        val requestCode = 1;
+        val discoverableIntent: Intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 1200)
+        }
+        startActivityForResult(discoverableIntent, requestCode)
+
         // Register for broadcasts when a device is discovered.
-        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        var filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
         registerReceiver(receiver, filter)
+
+        // Register for broadcasts when discovery has finished
+        filter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        this.registerReceiver(receiver, filter)
     }
 
     private fun checkBluetoothStatusAndPermissions() {
@@ -80,6 +91,9 @@ class MainActivity : AppCompatActivity() {
                     name = device?.name ?: "Unknown Device",
                     address = device?.address ?: "00:00:00:00"
                 )
+
+                // Print toast message if new device found
+                Toast.makeText(this@MainActivity, "FOUND NEW DEVICE!\n\nName: ${deviceInfo.name}\nAddress: ${deviceInfo.address}\n\n${Date()}", Toast.LENGTH_SHORT).show()
 
                 // Add the device to the list and notify the adapter
                 ScanNearbyDevices.devicesList.add(deviceInfo)
@@ -184,6 +198,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("Attack") { dialog, _ ->
                 dialog.dismiss()
+                scanner.stopScanning()
                 val intent = Intent(this, AttackActivity::class.java).apply {
                     putExtra("DEVICE_NAME", device.name)
                     putExtra("ADDRESS", device.address)

@@ -5,6 +5,7 @@
     <ListView
         android:id="@+id/deviceListView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:textSize="9sp" />
 
 </RelativeLayout>

@@ -48,6 +48,7 @@ class ScanNearbyDevices {
 
                     val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
                     pairedDevices?.forEach { device ->
+                        device.fetchUuidsWithSdp()
                         val deviceInfo = BluetoothDeviceInfo(
                             name = device.name ?: "Unknown Device",
                             address = device.address
