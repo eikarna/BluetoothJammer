@@ -16,8 +16,9 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textview.MaterialTextView
 import com.google.android.material.textfield.TextInputEditText
-import java.text.SimpleDateFormat
 import java.util.Date
+import util.Logger
+import kotlin.math.log
 
 class AttackActivity : AppCompatActivity() {
 
@@ -38,7 +39,7 @@ class AttackActivity : AppCompatActivity() {
         @JvmStatic
         var isAttacking = false
         var FrameworkVersion = 1.0
-        var loggingStatus = false
+        var loggingStatus = true
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -66,11 +67,8 @@ class AttackActivity : AppCompatActivity() {
         viewDeviceAddress.text = "Address: $address"
         viewThreads.setText("$threads")
         logAttack.justificationMode = LineBreaker.JUSTIFICATION_MODE_INTER_WORD
-        logAttack.append("Bluetooth Jammer Framework v$FrameworkVersion")
-        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-        val date = Date()
-        val current = formatter.format(date)
-        logAttack.append("\n[$current] Ready to go!")
+        Logger.appendLog(logAttack, "Bluetooth Jammer Framework Version: $FrameworkVersion")
+
 
 
         // Set button listener
@@ -109,13 +107,16 @@ class AttackActivity : AppCompatActivity() {
         isAttacking = true
         buttonStartStop.text = "Stop"
         BluetoothAdapter.getDefaultAdapter().cancelDiscovery()
-        for (i in 0..threads) L2capFloodAttack(address).startAttack(this, logAttack)
+        Logger.appendLog(logAttack, "Attack Started! Address: $address ($deviceName) | Threads: $threads")
+        Toast.makeText(this@AttackActivity, "PLEASE FORCE CLOSE APP IF YOU WANT STOP THE ATTACK!", Toast.LENGTH_LONG).show()
+        for (i in 1..threads) L2capFloodAttack(address).startAttack(this, logAttack)
     }
 
     @SuppressLint("MissingPermission")
     private fun stopAttack() {
         isAttacking = false
         buttonStartStop.text = "Start"
+        Logger.appendLog(logAttack, "Attack Stopped! Force close this app..")
         BluetoothAdapter.getDefaultAdapter().startDiscovery()
         L2capFloodAttack(address).stopAttack()
     }
@@ -124,6 +125,13 @@ class AttackActivity : AppCompatActivity() {
         super.onDestroy()
         if (isAttacking) {
             stopAttack() // Ensure the attack stops if the activity is destroyed
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (isAttacking) {
+            stopAttack()
         }
     }
 }
