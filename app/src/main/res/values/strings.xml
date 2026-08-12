@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">Bluetooth Jammer</string>
+    <string name="scan">Escanear</string>
+    <string name="only_speakers">Solo altavoces</string>
+    <string name="scanning">Escaneando dispositivos…</string>
+    <string name="status_total">%1$d dispositivos · %2$d altavoces</string>
+    <string name="status_filtered">%1$d altavoces</string>
+    <string name="no_devices">No se encontraron dispositivos. Pulsa Escanear.</string>
+    <string name="warning_title">Aviso educativo</string>
+    <string name="warning_message">Esta aplicación es una herramienta de INVESTIGACIÓN EDUCATIVA sobre seguridad Bluetooth.\n\nÚsala SOLO con dispositivos de tu propiedad y dentro de tu propio entorno.\n\nInterferir o atacar dispositivos ajenos es ilegal en la mayoría de jurisdicciones. El uso indebido es responsabilidad del usuario.</string>
+    <string name="warning_accept">Entendido</string>
+    <string name="attack_selected_default">Atacar</string>
+    <string name="attack_selected">Atacar (%1$d)</string>
+    <string name="target_added">Objetivo añadido: %1$s (mantén pulsado para quitarlo)</string>
+    <string name="target_removed">Objetivo quitado: %1$s</string>
 </resources>

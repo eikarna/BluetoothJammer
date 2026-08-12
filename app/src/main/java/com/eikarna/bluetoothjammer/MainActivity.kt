@@ -1,36 +1,43 @@
 package com.eikarna.bluetoothjammer
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.content.BroadcastReceiver
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.ListView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import api.BluetoothDeviceInfo
+import api.DeviceSource
 import api.ScanNearbyDevices
-import java.util.Date
+import com.google.android.material.materialswitch.MaterialSwitch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var listView: ListView
-    private lateinit var deviceListAdapter: ArrayAdapter<String>
-    private lateinit var devices: List<BluetoothDeviceInfo>
+    private lateinit var deviceListAdapter: DeviceAdapter
+    private lateinit var btnScan: Button
+    private lateinit var switchSpeakersOnly: MaterialSwitch
+    private lateinit var txtStatus: TextView
     private val scanner = ScanNearbyDevices.getInstance()
+    private var onlySpeakers = false
+    private var currentDevices: List<BluetoothDeviceInfo> = emptyList()
+    private lateinit var btnAttackSelected: Button
+    private val selectedTargets = LinkedHashMap<String, String>()
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 101
@@ -41,105 +48,145 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         listView = findViewById(R.id.deviceListView)
+        btnScan = findViewById(R.id.btnScan)
+        btnAttackSelected = findViewById(R.id.btnAttackSelected)
+        switchSpeakersOnly = findViewById(R.id.switchSpeakersOnly)
+        txtStatus = findViewById(R.id.txtStatus)
 
-        // Check and request necessary permissions
-        checkBluetoothStatusAndPermissions()
+        deviceListAdapter = DeviceAdapter(this, mutableListOf())
+        listView.adapter = deviceListAdapter
 
-        val requestCode = 1;
-        val discoverableIntent: Intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 1200)
+        btnScan.setOnClickListener { startScan() }
+        switchSpeakersOnly.setOnCheckedChangeListener { _, checked ->
+            onlySpeakers = checked
+            refreshList()
         }
-        startActivityForResult(discoverableIntent, requestCode)
 
-        // Register for broadcasts when a device is discovered.
-        var filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
-        registerReceiver(receiver, filter)
+        btnAttackSelected.setOnClickListener { launchSelectedAttack() }
+        listView.setOnItemLongClickListener { _, _, position, _ ->
+            val device = deviceListAdapter.getItem(position) ?: return@setOnItemLongClickListener false
+            if (selectedTargets.containsKey(device.address)) {
+                selectedTargets.remove(device.address)
+                Toast.makeText(this, getString(R.string.target_removed, device.name), Toast.LENGTH_SHORT).show()
+            } else {
+                selectedTargets[device.address] = device.name
+                Toast.makeText(this, getString(R.string.target_added, device.name), Toast.LENGTH_SHORT).show()
+            }
+            updateAttackButton()
+            true
+        }
 
-        // Register for broadcasts when discovery has finished
-        filter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-        this.registerReceiver(receiver, filter)
+        listView.setOnItemClickListener { _, _, position, _ ->
+            val selectedDevice = deviceListAdapter.getItem(position) ?: return@setOnItemClickListener
+            showDeviceInfo(selectedDevice)
+        }
+
+        checkBluetoothStatusAndPermissions()
     }
+
+    // ---------- Educational warning ----------
+
+    private fun showEducationalWarning() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.warning_title)
+            .setMessage(R.string.warning_message)
+            .setPositiveButton(R.string.warning_accept) { _, _ -> checkBluetoothStatusAndPermissions() }
+            .setCancelable(false)
+            .show()
+    }
+
+    // ---------- Scanning ----------
+
+    private fun startScan() {
+        val bluetoothManager = getSystemService(BluetoothManager::class.java)
+        val adapter = bluetoothManager?.adapter
+        if (adapter == null || !adapter.isEnabled) {
+            showBluetoothDisabledDialog()
+            return
+        }
+        if (!permissionsGranted()) {
+            checkBluetoothStatusAndPermissions()
+            return
+        }
+        txtStatus.text = getString(R.string.scanning)
+        scanner.startScanning(this) { devices -> runOnUiThread { onDevicesUpdated(devices) } }
+    }
+
+    private fun onDevicesUpdated(devices: List<BluetoothDeviceInfo>) {
+        currentDevices = devices
+        refreshList()
+    }
+
+    private fun refreshList() {
+        val filtered = if (onlySpeakers) currentDevices.filter { it.isSpeaker } else currentDevices
+        deviceListAdapter.update(filtered)
+        val speakers = currentDevices.count { it.isSpeaker }
+        txtStatus.text = when {
+            currentDevices.isEmpty() -> getString(R.string.no_devices)
+            onlySpeakers -> getString(R.string.status_filtered, filtered.size)
+            else -> getString(R.string.status_total, currentDevices.size, speakers)
+        }
+    }
+
+    // ---------- Multi-target selection ----------
+
+    private fun updateAttackButton() {
+        btnAttackSelected.text = getString(R.string.attack_selected, selectedTargets.size)
+        btnAttackSelected.isEnabled = selectedTargets.isNotEmpty()
+    }
+
+    private fun launchSelectedAttack() {
+        if (selectedTargets.isEmpty()) return
+        scanner.stopScanning()
+        val list = ArrayList(selectedTargets.map { (addr, name) -> "$name|$addr" })
+        val intent = Intent(this, AttackActivity::class.java).apply {
+            putStringArrayListExtra("EXTRA_TARGETS", list)
+            putExtra("THREADS", 8)
+        }
+        startActivity(intent)
+    }
+
+    // ---------- Permissions ----------
+
+    private fun permissionsGranted(): Boolean {
+        val permissions = requiredPermissions()
+        return permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requiredPermissions(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
 
     private fun checkBluetoothStatusAndPermissions() {
         val bluetoothManager: BluetoothManager = getSystemService(BluetoothManager::class.java)
         val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            // Bluetooth is either not supported or not enabled, show dialog
             showBluetoothDisabledDialog()
+        } else if (!permissionsGranted()) {
+            ActivityCompat.requestPermissions(this, requiredPermissions(), PERMISSION_REQUEST_CODE)
         } else {
-            // Bluetooth is enabled, proceed with permission checks
-            checkPermissionsAndStartScanning()
+            startScan()
         }
     }
 
-    // Create a BroadcastReceiver for ACTION_FOUND.
-    private val receiver = object : BroadcastReceiver() {
-
-        @SuppressLint("MissingPermission")
-        override fun onReceive(context: Context, intent: Intent) {
-            // Initialize the ListView and Adapter
-            val action: String? = intent.action
-            Log.d("MainActivity", "Action: $action")
-            println("Action: $action")
-            if (BluetoothDevice.ACTION_FOUND == action) {
-                // Discovery has found a device. Get the BluetoothDevice
-                Log.d("MainActivity", "Device Found")
-                println("Device Found")
-                val device: BluetoothDevice? =
-                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                val deviceInfo = BluetoothDeviceInfo(
-                    name = device?.name ?: "Unknown Device",
-                    address = device?.address ?: "00:00:00:00"
-                )
-
-                // Print toast message if new device found
-                Toast.makeText(this@MainActivity, "FOUND NEW DEVICE!\n\nName: ${deviceInfo.name}\nAddress: ${deviceInfo.address}\n\n${Date()}", Toast.LENGTH_SHORT).show()
-
-                // Add the device to the list and notify the adapter
-                ScanNearbyDevices.devicesList.add(deviceInfo)
-            }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
     private fun showBluetoothDisabledDialog() {
         val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
         startActivityForResult(enableBtIntent, 1)
     }
 
-    private fun checkPermissionsAndStartScanning() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // For Android 12 and higher, request specific Bluetooth permissions
-            val permissions = arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            if (!hasPermissions(permissions)) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
-            } else {
-                // Permissions already granted, start scanning
-                startScanningForDevices()
-            }
-        } else {
-            // For older Android versions, request Bluetooth and location permissions
-            val permissions = arrayOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            if (!hasPermissions(permissions)) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
-            } else {
-                // Permissions already granted, start scanning
-                startScanningForDevices()
-            }
-        }
-    }
-
-    // Handle the permission request result
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -148,50 +195,24 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                // All permissions were granted
-                startScanningForDevices()
+                startScan()
             } else {
-                // Permission denied, show a message
                 Toast.makeText(
                     this,
-                    "Permissions are required to scan for Bluetooth devices",
+                    "Permisos necesarios para escanear dispositivos",
                     Toast.LENGTH_SHORT
                 ).show()
             }
         }
     }
 
-    private fun hasPermissions(permissions: Array<String>): Boolean {
-        return permissions.all {
-            ContextCompat.checkSelfPermission(
-                this,
-                it
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
+    // ---------- Device dialog (existing behavior) ----------
 
-    private fun startScanningForDevices() {
-        // Start scanning for nearby Bluetooth devices
-        scanner.startScanning(this) { discoveredDevices ->
-            devices = discoveredDevices
-            val deviceNames = devices.map { "${it.name} (${it.address})" }
-
-            // Set up ArrayAdapter to show the list of devices
-            deviceListAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, deviceNames)
-            listView.adapter = deviceListAdapter
-
-            // Handle item click events
-            listView.setOnItemClickListener { _, _, position, _ ->
-                val selectedDevice = devices[position]
-                showDeviceInfo(selectedDevice)
-            }
-        }
-    }
-
-    // Show device details in a dialog
     private fun showDeviceInfo(device: BluetoothDeviceInfo) {
-        val message =
-            "Name: ${device.name}\nAddress: ${device.address}"
+        val speakerTag = if (device.isSpeaker) "\nTipo: ALTAPARLANTE" else ""
+        val vendorLine = device.vendor?.let { "\nFabricante: $it" } ?: ""
+        val servicesLine = device.serviceUuids?.take(4)?.joinToString(", ")?.let { "\nServicios: $it" } ?: ""
+        val message = "Name: ${device.name}\nAddress: ${device.address}$speakerTag$vendorLine$servicesLine"
 
         val dialogBuilder = AlertDialog.Builder(this)
         dialogBuilder.setTitle("Device Info")
@@ -204,13 +225,9 @@ class MainActivity : AppCompatActivity() {
                     putExtra("ADDRESS", device.address)
                     putExtra("THREADS", 8)
                 }
-
-                // Start AttackActivity
                 startActivity(intent)
             }
-            .setNegativeButton("Close") { dialog, _ ->
-                dialog.dismiss()
-            }
+            .setNegativeButton("Close") { dialog, _ -> dialog.dismiss() }
             .setNeutralButton("Copy Info") { _, _ ->
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = android.content.ClipData.newPlainText("Device Info", message)
@@ -220,21 +237,60 @@ class MainActivity : AppCompatActivity() {
         dialogBuilder.create().show()
     }
 
-    // Stop scanning when the activity is destroyed
-    override fun onDestroy() {
-        super.onDestroy()
-        scanner.stopScanning()
+    // ---------- Lifecycle ----------
+
+    override fun onResume() {
+        super.onResume()
+        if (permissionsGranted()) startScan()
     }
 
-    // Stop scanning when change to another intent
     override fun onPause() {
         super.onPause()
         scanner.stopScanning()
     }
 
-    // Resume scanning
-    override fun onResume() {
-        super.onResume()
-        scanner.resumeScanning()
+    override fun onDestroy() {
+        super.onDestroy()
+        scanner.stopScanning()
+    }
+
+    // ---------- Adapter ----------
+
+    private class DeviceAdapter(context: Context, items: List<BluetoothDeviceInfo>) :
+        ArrayAdapter<BluetoothDeviceInfo>(context, 0, items) {
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_device, parent, false)
+            val info = getItem(position) ?: return view
+
+            val nameView = view.findViewById<TextView>(R.id.textDeviceName)
+            val metaView = view.findViewById<TextView>(R.id.textDeviceMeta)
+
+            nameView.text = buildString {
+                if (info.isSpeaker) append("🔊 ")
+                append(info.name)
+            }
+
+            val pieces = mutableListOf<String>()
+            when (info.source) {
+                DeviceSource.PAIRED -> pieces.add("Emparejado")
+                DeviceSource.CLASSIC -> pieces.add("Clásico")
+                DeviceSource.BLE -> pieces.add("BLE")
+            }
+            info.deviceTypeLabel?.let { pieces.add(it) }
+            info.vendor?.let { pieces.add(it) }
+            info.serviceUuids?.take(3)?.let { pieces.add("Serv: ${it.joinToString(",")}") }
+            if (info.isSpeaker) info.speakerReason?.let { pieces.add("Altavoz ($it)") }
+            info.rssi?.let { pieces.add("RSSI $it") }
+            metaView.text = if (pieces.isEmpty()) "Sin datos" else pieces.joinToString(" · ")
+
+            return view
+        }
+
+        fun update(items: List<BluetoothDeviceInfo>) {
+            clear()
+            addAll(items)
+            notifyDataSetChanged()
+        }
     }
 }

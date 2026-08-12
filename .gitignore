@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Session artifact — never publish
+chat_export_*.md
+
+# Agent internal state — never publish
+.codewhale/

@@ -44,6 +44,144 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delay (ms): "
+            android:textSize="12sp"/>
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editTextDelay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="0"
+            android:inputType="number"
+            android:hint="0 = máximo, ej. 200"
+            android:imeOptions="actionNext"
+            android:textSize="12sp"
+            android:cursorVisible="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TX (s): "
+            android:textSize="12sp"/>
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editTextTxSeconds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="10"
+            android:inputType="number"
+            android:hint="10 (0 = sin ciclo)"
+            android:imeOptions="actionNext"
+            android:textSize="12sp"
+            android:cursorVisible="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sleep (s): "
+            android:textSize="12sp"/>
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editTextSleepSeconds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="5"
+            android:inputType="number"
+            android:hint="5 (0 = continuo)"
+            android:imeOptions="actionNext"
+            android:textSize="12sp"
+            android:cursorVisible="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Payload (B): "
+            android:textSize="12sp"/>
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editTextPayloadSize"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="0"
+            android:inputType="number"
+            android:hint="0 = auto, ej. 990"
+            android:imeOptions="actionNext"
+            android:textSize="12sp"
+            android:cursorVisible="false" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchBombard"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bombardeo (conectar/enviar/cerrar)"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Patrón: "
+            android:textSize="12sp"/>
+
+        <Spinner
+            android:id="@+id/spinnerPayloadPattern"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="vertical">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tipo de ataque:"
+            android:textSize="12sp" />
+
+        <Spinner
+            android:id="@+id/spinnerAttackType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/buttonStartStop"
         android:layout_width="wrap_content"
