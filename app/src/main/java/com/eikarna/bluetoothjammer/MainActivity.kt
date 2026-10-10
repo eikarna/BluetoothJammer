@@ -13,7 +13,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.ListView
 import android.widget.Toast
@@ -29,11 +28,16 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var listView: ListView
     private lateinit var deviceListAdapter: ArrayAdapter<String>
-    private lateinit var devices: List<BluetoothDeviceInfo>
+    private val deviceNames = mutableListOf<String>()
+    private var devices: List<BluetoothDeviceInfo> = emptyList()
     private val scanner = ScanNearbyDevices.getInstance()
+    private var receiverRegistered = false
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 101
+        private const val REQUEST_ENABLE_BT = 1
+        private const val REQUEST_DISCOVERABLE = 2
+        private const val DISCOVERABLE_DURATION_SECONDS = 1200
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,24 +45,43 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         listView = findViewById(R.id.deviceListView)
+        deviceListAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, deviceNames)
+        listView.adapter = deviceListAdapter
+
+        // Handle item click events
+        listView.setOnItemClickListener { _, _, position, _ ->
+            devices.getOrNull(position)?.let { showDeviceInfo(it) }
+        }
 
         // Check and request necessary permissions
         checkBluetoothStatusAndPermissions()
 
-        val requestCode = 1;
         val discoverableIntent: Intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 1200)
+            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_DURATION_SECONDS)
         }
-        startActivityForResult(discoverableIntent, requestCode)
+        startActivityForResult(discoverableIntent, REQUEST_DISCOVERABLE)
 
         // Register for broadcasts when a device is discovered.
-        var filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
-        registerReceiver(receiver, filter)
-
-        // Register for broadcasts when discovery has finished
-        filter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-        this.registerReceiver(receiver, filter)
+        registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
+        receiverRegistered = true
     }
+
+    private fun requiredPermissions(): Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // For Android 12 and higher, request specific Bluetooth permissions
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            // For older Android versions, request Bluetooth and location permissions
+            arrayOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
 
     private fun checkBluetoothStatusAndPermissions() {
         val bluetoothManager: BluetoothManager = getSystemService(BluetoothManager::class.java)
@@ -77,26 +100,20 @@ class MainActivity : AppCompatActivity() {
 
         @SuppressLint("MissingPermission")
         override fun onReceive(context: Context, intent: Intent) {
-            // Initialize the ListView and Adapter
-            val action: String? = intent.action
-            Log.d("MainActivity", "Action: $action")
-            println("Action: $action")
-            if (BluetoothDevice.ACTION_FOUND == action) {
-                // Discovery has found a device. Get the BluetoothDevice
-                Log.d("MainActivity", "Device Found")
-                println("Device Found")
-                val device: BluetoothDevice? =
-                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                val deviceInfo = BluetoothDeviceInfo(
-                    name = device?.name ?: "Unknown Device",
-                    address = device?.address ?: "00:00:00:00"
-                )
+            if (BluetoothDevice.ACTION_FOUND != intent.action) return
 
+            // Discovery has found a device. Get the BluetoothDevice.
+            val device: BluetoothDevice =
+                intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE) ?: return
+
+            // Register the device (deduplicated by MAC address).
+            if (scanner.addDevice(device)) {
                 // Print toast message if new device found
-                Toast.makeText(this@MainActivity, "FOUND NEW DEVICE!\n\nName: ${deviceInfo.name}\nAddress: ${deviceInfo.address}\n\n${Date()}", Toast.LENGTH_SHORT).show()
-
-                // Add the device to the list and notify the adapter
-                ScanNearbyDevices.devicesList.add(deviceInfo)
+                Toast.makeText(
+                    this@MainActivity,
+                    "FOUND NEW DEVICE!\n\nName: ${device.name ?: "Unknown Device"}\nAddress: ${device.address}\n\n${Date()}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -104,38 +121,16 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun showBluetoothDisabledDialog() {
         val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        startActivityForResult(enableBtIntent, 1)
+        startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
     }
 
     private fun checkPermissionsAndStartScanning() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // For Android 12 and higher, request specific Bluetooth permissions
-            val permissions = arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            if (!hasPermissions(permissions)) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
-            } else {
-                // Permissions already granted, start scanning
-                startScanningForDevices()
-            }
+        val permissions = requiredPermissions()
+        if (!hasPermissions(permissions)) {
+            ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
         } else {
-            // For older Android versions, request Bluetooth and location permissions
-            val permissions = arrayOf(
-                Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-
-            if (!hasPermissions(permissions)) {
-                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
-            } else {
-                // Permissions already granted, start scanning
-                startScanningForDevices()
-            }
+            // Permissions already granted, start scanning
+            startScanningForDevices()
         }
     }
 
@@ -172,19 +167,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun startScanningForDevices() {
         // Start scanning for nearby Bluetooth devices
-        scanner.startScanning(this) { discoveredDevices ->
-            devices = discoveredDevices
-            val deviceNames = devices.map { "${it.name} (${it.address})" }
+        scanner.startScanning(this, ::renderDevices)
+    }
 
-            // Set up ArrayAdapter to show the list of devices
-            deviceListAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, deviceNames)
-            listView.adapter = deviceListAdapter
+    private fun renderDevices(discoveredDevices: List<BluetoothDeviceInfo>) {
+        devices = discoveredDevices
 
-            // Handle item click events
-            listView.setOnItemClickListener { _, _, position, _ ->
-                val selectedDevice = devices[position]
-                showDeviceInfo(selectedDevice)
-            }
+        val names = discoveredDevices.map { "${it.name} (${it.address})" }
+        if (names != deviceNames) {
+            // Update the existing adapter instead of replacing it every second,
+            // so the list does not flicker and clicks keep working.
+            deviceNames.clear()
+            deviceNames.addAll(names)
+            deviceListAdapter.notifyDataSetChanged()
         }
     }
 
@@ -224,6 +219,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         scanner.stopScanning()
+        if (receiverRegistered) {
+            unregisterReceiver(receiver)
+            receiverRegistered = false
+        }
     }
 
     // Stop scanning when change to another intent
@@ -235,6 +234,8 @@ class MainActivity : AppCompatActivity() {
     // Resume scanning
     override fun onResume() {
         super.onResume()
-        scanner.resumeScanning()
+        if (hasPermissions(requiredPermissions())) {
+            startScanningForDevices()
+        }
     }
 }

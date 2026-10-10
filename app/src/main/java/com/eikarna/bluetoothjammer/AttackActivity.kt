@@ -2,23 +2,20 @@ package com.eikarna.bluetoothjammer
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.graphics.text.LineBreaker
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.text.isDigitsOnly
 import androidx.core.widget.doAfterTextChanged
 import api.L2capFloodAttack
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.textview.MaterialTextView
 import com.google.android.material.textfield.TextInputEditText
-import java.util.Date
+import com.google.android.material.textview.MaterialTextView
 import util.Logger
-import kotlin.math.log
 
 class AttackActivity : AppCompatActivity() {
 
@@ -35,24 +32,27 @@ class AttackActivity : AppCompatActivity() {
     private lateinit var address: String
     private var threads: Int = 1
 
+    // Keep every attack worker alive here so "Stop" can shut all of them down.
+    private val attacks = mutableListOf<L2capFloodAttack>()
+
     companion object {
         @JvmStatic
         var isAttacking = false
         var FrameworkVersion = 1.0
         var loggingStatus = true
+        private const val MIN_THREADS = 1
+        private const val MAX_THREADS = 64
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d("AttackActivity", "onCreate called")
-        println("AttackActivity onCreate called")
         super.onCreate(savedInstanceState)
         setContentView(R.layout.attack_layout)
 
         // Get data from Intent
         deviceName = intent.getStringExtra("DEVICE_NAME") ?: "Unknown Device"
         address = intent.getStringExtra("ADDRESS") ?: "Unknown Address"
-        threads = intent.getIntExtra("THREADS", 1)
+        threads = intent.getIntExtra("THREADS", 1).coerceIn(MIN_THREADS, MAX_THREADS)
 
         // Get Element ID
         viewDeviceName = findViewById(R.id.textViewDeviceName)
@@ -69,8 +69,6 @@ class AttackActivity : AppCompatActivity() {
         logAttack.justificationMode = LineBreaker.JUSTIFICATION_MODE_INTER_WORD
         Logger.appendLog(logAttack, "Bluetooth Jammer Framework Version: $FrameworkVersion")
 
-
-
         // Set button listener
         buttonStartStop.setOnClickListener {
             if (isAttacking) {
@@ -82,10 +80,9 @@ class AttackActivity : AppCompatActivity() {
 
         // Threading Input listener
         viewThreads.doAfterTextChanged { str ->
-            if (str != null) {
-                if (str.toString() != "" && str.isDigitsOnly()) {
-                    threads = str.toString().toInt()
-                }
+            val value = str?.toString()?.toIntOrNull()
+            if (value != null && value >= MIN_THREADS) {
+                threads = value.coerceAtMost(MAX_THREADS)
             }
         }
 
@@ -101,24 +98,39 @@ class AttackActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     @SuppressLint("MissingPermission")
     private fun startAttack() {
+        if (!BluetoothAdapter.checkBluetoothAddress(address)) {
+            Toast.makeText(this, "Invalid Bluetooth address: $address", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        threads = threads.coerceIn(MIN_THREADS, MAX_THREADS)
+        if (viewThreads.text.toString() != "$threads") {
+            viewThreads.setText("$threads")
+        }
+
         isAttacking = true
         buttonStartStop.text = "Stop"
-        BluetoothAdapter.getDefaultAdapter().cancelDiscovery()
+
+        val bluetoothManager: BluetoothManager? = getSystemService(BluetoothManager::class.java)
+        bluetoothManager?.adapter?.cancelDiscovery()
+
         Logger.appendLog(logAttack, "Attack Started! Address: $address ($deviceName) | Threads: $threads")
-        Toast.makeText(this@AttackActivity, "PLEASE FORCE CLOSE APP IF YOU WANT STOP THE ATTACK!", Toast.LENGTH_LONG).show()
-        for (i in 1..threads) L2capFloodAttack(address).startAttack(this, logAttack)
+        repeat(threads) {
+            val attack = L2capFloodAttack(address)
+            attacks.add(attack)
+            attack.startAttack(this, logAttack)
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun stopAttack() {
         isAttacking = false
         buttonStartStop.text = "Start"
-        Logger.appendLog(logAttack, "Attack Stopped! Force close this app..")
-        BluetoothAdapter.getDefaultAdapter().startDiscovery()
-        L2capFloodAttack(address).stopAttack()
+        attacks.forEach { it.stopAttack() }
+        attacks.clear()
+        Logger.appendLog(logAttack, "Attack Stopped! All threads terminated.")
     }
 
     override fun onDestroy() {
